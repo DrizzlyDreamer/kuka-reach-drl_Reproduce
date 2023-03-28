@@ -31,8 +31,8 @@
                 1.137684,
                 -0.006539
             ],
-            "is_good_view":	false,
-            "is_render":	false,
+            "is_good_view":	true,
+            "is_render":	true,
             "joint_damping":	[
                 1e-05,
                 1e-05,
@@ -51,6 +51,7 @@
                 4,
                 6
             ],
+            "kuka_id":	1,
             "lower_limits":	[
                 -0.967,
                 -2,
@@ -60,15 +61,21 @@
                 -2.09,
                 -3.05
             ],
-            "max_steps_one_episode":	1000,
             "np_random":	"RandomState(MT19937)",
+            "num_joints":	7,
+            "object_id":	3,
+            "object_pos":	[
+                0.5651070233143036,
+                -0.24404954831751094,
+                0.00982638888888889
+            ],
             "observation_space":	{
                 "Box(3,)":	{
                     "bounded_above":	"[ True  True  True]",
                     "bounded_below":	"[ True  True  True]",
                     "dtype":	"float32",
-                    "high":	"[1. 1. 1.]",
-                    "low":	"[-1.  -1.  -0.1]",
+                    "high":	"[0.7  0.3  0.55]",
+                    "low":	"[ 0.2 -0.3  0. ]",
                     "np_random":	"RandomState(MT19937)",
                     "shape":	[
                         3
@@ -90,7 +97,13 @@
                 -1.0367255756846319,
                 0
             ],
+            "robot_pos_obs":	[
+                0.5320540070533752,
+                -0.0011213874677196145,
+                0.4962984025478363
+            ],
             "step_counter":	0,
+            "terminated":	false,
             "upper_limits":	[
                 0.967,
                 2,
@@ -100,25 +113,19 @@
                 2.09,
                 3.05
             ],
-            "urdf_root_path":	"/home/dell/miniconda3/envs/spinningup/lib/python3.6/site-packages/pybullet_data",
+            "urdf_root_path":	"/home/zhangshidi/anaconda3/envs/spinningup/lib/python3.6/site-packages/pybullet_data",
             "x_high_action":	0.4,
-            "x_high_obs":	1.0,
-            "x_high_obs_for_judge":	0.7,
+            "x_high_obs":	0.7,
             "x_low_action":	-0.4,
-            "x_low_obs":	-1.0,
-            "x_low_obs_for_judge":	0.2,
+            "x_low_obs":	0.2,
             "y_high_action":	0.4,
-            "y_high_obs":	1.0,
-            "y_high_obs_for_judge":	0.3,
+            "y_high_obs":	0.3,
             "y_low_action":	-0.4,
-            "y_low_obs":	-1.0,
-            "y_low_obs_for_judge":	-0.3,
+            "y_low_obs":	-0.3,
             "z_high_action":	0.3,
-            "z_high_obs":	1.0,
-            "z_high_obs_for_judge":	0.55,
+            "z_high_obs":	0.55,
             "z_low_action":	-0.6,
-            "z_low_obs":	-0.1,
-            "z_low_obs_for_judge":	0
+            "z_low_obs":	0
         }
     },
     "epochs":	100,
@@ -126,7 +133,7 @@
     "gamma":	0.99,
     "lam":	0.97,
     "logger":	{
-        "<ppo.logx.EpochLogger object at 0x7f3220056cf8>":	{
+        "<ppo.logx.EpochLogger object at 0x7f619803ae10>":	{
             "epoch_dict":	{},
             "exp_name":	"ppo-kuka-reach",
             "first_row":	true,

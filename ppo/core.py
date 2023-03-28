@@ -26,6 +26,8 @@ from torch.distributions.categorical import Categorical
 IS_DEBUG=False
 core_logger=Logger(output_dir="../logs/",is_debug=IS_DEBUG)
 
+
+#缓冲区
 def combined_shape(length, shape=None):
     if shape is None:
         return (length,)

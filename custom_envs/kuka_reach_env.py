@@ -136,7 +136,8 @@ class KukaReachEnv(gym.Env):
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
-    
+
+# reset函数是较为重要的一个函数，它定义了机械臂初始化时的状态、机械臂的初始化、observation等。
     def reset(self):
         # p.connect(p.GUI)
         self.step_counter = 0
@@ -254,6 +255,8 @@ class KukaReachEnv(gym.Env):
         # return np.array(self.robot_pos_obs).astype(np.float32)
         return self._get_observation()
 
+# step函数也是一个非常重要的函数，它主要定义了机械臂根据强化学习算法生成的action，来决定自己怎样进行动作。其中主要涉及到了机械臂的控制、逆解等。
+# 这里的策略是把算法生成的action进行很小的分割，避免因为action的输出离散过大，造成机械臂突然过大幅度的运动。然后将分割后的action作为变化值，与之前的位置信息叠加作为最后的位置值。
     def step(self, action):
         dv = 0.005
         dx = action[0] * dv
@@ -262,12 +265,12 @@ class KukaReachEnv(gym.Env):
 
         self.current_pos = p.getLinkState(self.kuka_id, self.num_joints - 1)[4]
         # logging.debug("self.current_pos={}\n".format(self.current_pos))
-        self.new_robot_pos = [
+        self.new_robot_pos = [                                            # 这里就是把sample出来的动作缩小然后加上去
             self.current_pos[0] + dx, self.current_pos[1] + dy,
             self.current_pos[2] + dz
         ]
         # logging.debug("self.new_robot_pos={}\n".format(self.new_robot_pos))
-        self.robot_joint_positions = p.calculateInverseKinematics(
+        self.robot_joint_positions = p.calculateInverseKinematics(        # PyBullet内置的逆运动学求解器
             bodyUniqueId=self.kuka_id,
             endEffectorLinkIndex=self.num_joints - 1,
             targetPosition=[
@@ -299,30 +302,34 @@ class KukaReachEnv(gym.Env):
         # print(np.array(self.object_pos+self.robot_pos).astype(np.float32))
         return np.array(observation).astype(np.float32)
 
+# 重中之重
+    # （1）如果机械臂末端的位置超出了工作空间，给一个-0.1的奖励；
+    # （2）如果在达到一个episode允许的最大step还没达到reach的位置，给一个-0.1的奖励；
+    # （3）如果机械臂在允许的step、允许的工作空间范围内reach了物体，给一个+1的奖励
     def _reward(self):
 
         # 一定注意是取第4个值，请参考pybullet手册的这个函数返回值的说明
-        self.robot_state = p.getLinkState(self.kuka_id, self.num_joints - 1)[4]
+        self.robot_state = p.getLinkState(self.kuka_id, self.num_joints - 1)[4]  # num_joints - 1表示末端link | [4]表示linkFramePosition，位置xyz
         # self.object_state=p.getBasePositionAndOrientation(self.object_id)
         # self.object_state=np.array(self.object_state).astype(np.float32)
         #
-        self.object_state = np.array(
+        self.object_state = np.array(                                  #获取指定物体的位置和方向信息，并将其存储在一个 Numpy 数组中。
             p.getBasePositionAndOrientation(self.object_id)[0]).astype(
                 np.float32)
 
-        square_dx = (self.robot_state[0] - self.object_state[0])**2
+        square_dx = (self.robot_state[0] - self.object_state[0])**2  #(tcp - reach)^2
         square_dy = (self.robot_state[1] - self.object_state[1])**2
         square_dz = (self.robot_state[2] - self.object_state[2])**2
 
         # 用机械臂末端和物体的距离作为奖励函数的依据
-        self.distance = sqrt(square_dx + square_dy + square_dz)
+        self.distance = sqrt(square_dx + square_dy + square_dz)     #计算距离
         # print(self.distance)
 
         x = self.robot_state[0]
         y = self.robot_state[1]
         z = self.robot_state[2]
 
-        # 如果机械比末端超过了obs的空间，也视为done，而且会给予一定的惩罚
+        # 如果机械比末端超过了obs的空间，也视为done，而且会给予一定的惩罚     (定义的白色空间)
         terminated = bool(x < self.x_low_obs_for_judge
                           or x > self.x_high_obs_for_judge
                           or y < self.y_low_obs_for_judge
@@ -330,16 +337,16 @@ class KukaReachEnv(gym.Env):
                           or z < self.z_low_obs_for_judge
                           or z > self.z_high_obs_for_judge)
 
-        if terminated:
+        if terminated:                                              #超出边界  - 0.1
             reward = -0.1
             self.terminated = True
 
         # 如果机械臂一直无所事事，在最大步数还不能接触到物体，也需要给一定的惩罚
-        elif self.step_counter > self.max_steps_one_episode:
+        elif self.step_counter > self.max_steps_one_episode:        #超出步数
             reward = -0.1
             self.terminated = True
 
-        elif self.distance < 0.1:
+        elif self.distance < 0.1:                                   #到达位置
             reward = 1
             self.terminated = True
         else:
@@ -363,7 +370,7 @@ if __name__ == '__main__':
     }
 
     config = EnvContext(env_config=env_config, worker_index=1, num_workers=1)
-    # 这一部分是做baseline，即让机械臂随机选择动作，看看能够得到的分数
+    # 这一部分是做baseline，即让机械臂随机选择动作，看看能够得到的分数        （baseline是一个强化学习库）
     env = KukaReachEnv(config)
     print(env)
     print(env.observation_space.shape)
@@ -372,6 +379,7 @@ if __name__ == '__main__':
     print(env.action_space.shape)
     obs = env.reset()
     print(obs)
+
     sum_reward = 0
     for i in range(10000):
         env.reset()

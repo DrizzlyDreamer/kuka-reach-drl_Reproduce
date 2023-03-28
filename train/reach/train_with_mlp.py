@@ -45,7 +45,7 @@ args = parser.parse_args()
 
 
 
-env=KukaReachEnv(is_render=args.is_render,is_good_view=args.is_good_view)
+env=KukaReachEnv(is_render=args.is_render,is_good_view=args.is_good_view)      #对应输入信息
 
 mpi_fork(args.cpu)  # run parallel code with mpi
 
@@ -61,3 +61,9 @@ ppo(env,
     steps_per_epoch=env.max_steps_one_episode*args.cpu,
     epochs=args.epochs,
     logger_kwargs=logger_kwargs)
+
+
+
+#  python train_with_mlp.py --is_render  --is_good_view  --cpu 5 --epochs 100
+
+# python train_with_mlp.py  --cpu 5 --epochs 100

@@ -31,7 +31,7 @@ init(autoreset=True)
 IS_DEBUG = False
 ppo_logger = Logger(output_dir="../logs", is_debug=IS_DEBUG)
 
-
+#定义缓冲区
 class PPOBuffer:
     """
     A buffer for storing trajectories experienced by a PPO agent interacting
@@ -39,7 +39,7 @@ class PPOBuffer:
     for calculating the advantages of state-action pairs.
     """
     def __init__(self, obs_dim, act_dim, size, gamma=0.99, lam=0.95):
-        self.obs_buf = np.zeros(core.combined_shape(size, obs_dim),
+        self.obs_buf = np.zeros(core.combined_shape(size, obs_dim),  #因为 size 和 obs_dim 可能是标量或元组，因此需要一个辅助函数 combined_shape 将它们组合成一个形状。
                                 dtype=np.float32)
         self.act_buf = np.zeros(core.combined_shape(size, act_dim),
                                 dtype=np.float32)
@@ -51,6 +51,7 @@ class PPOBuffer:
         self.gamma, self.lam = gamma, lam
         self.ptr, self.path_start_idx, self.max_size = 0, 0, size
 
+    #存储函数
     def store(self, obs, act, rew, val, logp):
         """
         Append one timestep of agent-environment interaction to the buffer.
@@ -63,6 +64,8 @@ class PPOBuffer:
         self.logp_buf[self.ptr] = logp
         self.ptr += 1
 
+# 上面两个函数较为重要，finish_path函数计算了GAE用来估计优势函数，同时计算了reward to go，用于value function求loss，GAE和reward to go的算法细节后面会补充。
+    #完成一条轨迹
     def finish_path(self, last_val=0):
         """
         Call this at the end of a trajectory, or when one gets cut off
@@ -84,11 +87,13 @@ class PPOBuffer:
         vals = np.append(self.val_buf[path_slice], last_val)
 
         # the next two lines implement GAE-Lambda advantage calculation
+        # 优势函数估计及其保存
         deltas = rews[:-1] + self.gamma * vals[1:] - vals[:-1]
         self.adv_buf[path_slice] = core.discount_cumsum(
             deltas, self.gamma * self.lam)
 
         # the next line computes rewards-to-go, to be targets for the value function
+        # 奖励估计及其保存
         self.ret_buf[path_slice] = core.discount_cumsum(rews, self.gamma)[:-1]
 
         self.path_start_idx = self.ptr
@@ -296,6 +301,7 @@ def ppo(env,
     buf = PPOBuffer(obs_dim, act_dim, local_steps_per_epoch, gamma, lam)
     ppo_logger.log("buf={}".format(buf))
 
+# 策略函数的损失函数
     # Set up function for computing PPO policy loss
     def compute_loss_pi(data):
         obs, act, adv, logp_old = data['obs'], data['act'], data['adv'], data[
@@ -304,24 +310,25 @@ def ppo(env,
             obs, act, adv, logp_old))
 
         # Policy loss
-        pi, logp = ac.pi(obs, act)
+        pi, logp = ac.pi(obs, act) # 策略函数的输出pi和对数概率logp
         ppo_logger.log("pi={},logp={}".format(pi, logp))
 
-        ratio = torch.exp(logp - logp_old)
-        clip_adv = torch.clamp(ratio, 1 - clip_ratio, 1 + clip_ratio) * adv
-        loss_pi = -(torch.min(ratio * adv, clip_adv)).mean()
+        ratio = torch.exp(logp - logp_old)  # 那个分数 -通过比较新策略函数输出的概率分布和旧策略函数输出的概率分布，计算重要性采样比率 ratio ,torch.exp计算的指数，这里算的指数的除数e^x，可以转换成除法的
+        clip_adv = torch.clamp(ratio, 1 - clip_ratio, 1 + clip_ratio) * adv  # 公式 - g(...,A) - clip(x,x)
+        loss_pi = -(torch.min(ratio * adv, clip_adv)).mean()  # 这里的adv就是优势函数
         ppo_logger.log("ratio={},clip_adv={},loss_pi={}".format(
             ratio, clip_adv, loss_pi))
 
         # Useful extra info
-        approx_kl = (logp_old - logp).mean().item()
-        ent = pi.entropy().mean().item()
-        clipped = ratio.gt(1 + clip_ratio) | ratio.lt(1 - clip_ratio)
+        approx_kl = (logp_old - logp).mean().item()   # KL散度
+        ent = pi.entropy().mean().item()       # 策略函数的熵
+        clipped = ratio.gt(1 + clip_ratio) | ratio.lt(1 - clip_ratio)   # 剪切比例 clipfrac
         clipfrac = torch.as_tensor(clipped, dtype=torch.float32).mean().item()
-        pi_info = dict(kl=approx_kl, ent=ent, cf=clipfrac)
+        pi_info = dict(kl=approx_kl, ent=ent, cf=clipfrac)      #保存在字典中
 
         return loss_pi, pi_info
 
+# 价值函数的损失计算，我们一般使用当前obs的价值函数与reward-to-go的值进行差值平方取平均运算
     # Set up function for computing value loss
     def compute_loss_v(data):
         obs, ret = data['obs'], data['ret']
@@ -336,45 +343,50 @@ def ppo(env,
     # Set up model saving
     logger.setup_pytorch_saver(ac)
 
+# PPO更新过程，可以看spinning up更新的算法图
     def update():
         data = buf.get()
-
+        #计算策略梯度的损失函数
         pi_l_old, pi_info_old = compute_loss_pi(data)
         #ppo_logger.log("pi_l_old={},pi_info_old={}".format(pi_l_old,pi_info_old))
 
         pi_l_old = pi_l_old.item()
+        #计算价值损失函数
         v_l_old = compute_loss_v(data).item()
         #ppo_logger.log("pi_l_old={},v_l_old={}".format(pi_l_old,v_l_old))
 
         # Train policy with multiple steps of gradient descent
+        #策略函数的训练->->->使用多次梯度下降策略
         for i in range(train_pi_iters):
-            pi_optimizer.zero_grad()
-            loss_pi, pi_info = compute_loss_pi(data)
+            pi_optimizer.zero_grad()                                   #策略优化器梯度清零
+            loss_pi, pi_info = compute_loss_pi(data)                   #策略损失函数
             #ppo_logger.log("loss_pi={},pi_info={}".format(loss_pi,pi_info))
 
-            kl = mpi_avg(pi_info['kl'])
-            if kl > 1.5 * target_kl:
+            kl = mpi_avg(pi_info['kl'])                              #KL 散度
+            if kl > 1.5 * target_kl:                                 #KL 散度是否超过阈值
                 logger.log(
                     'Early stopping at step %d due to reaching max kl.' % i)
                 break
-            loss_pi.backward()
-            mpi_avg_grads(ac.pi)  # average grads across MPI processes
-            pi_optimizer.step()
+            loss_pi.backward()       # 反向传播计算梯度
+            mpi_avg_grads(ac.pi)     # average grads across MPI processes  # 平均 MPI 进程中的梯度
+            pi_optimizer.step()      # 优化策略，改了参数
 
-        logger.store(StopIter=i)
+        logger.store(StopIter=i)    # 存储训练的步数
 
+        #价值函数的训练
         # Value function learning
         for i in range(train_v_iters):
-            vf_optimizer.zero_grad()
-            loss_v = compute_loss_v(data)
+            vf_optimizer.zero_grad()                  # 价值优化器梯度清零
+            loss_v = compute_loss_v(data)            # 价值损失函数
             ppo_logger.log("loss_v={}".format(loss_v))
-            loss_v.backward()
-            mpi_avg_grads(ac.v)  # average grads across MPI processes
-            vf_optimizer.step()
+            loss_v.backward()                        # 反向传播计算梯度
+            mpi_avg_grads(ac.v)  # average grads across MPI processes   # 平均 MPI 进程中的梯度
+            vf_optimizer.step()                    # 优化价值函数，更新参数
 
         # Log changes from update
-        kl, ent, cf = pi_info['kl'], pi_info_old['ent'], pi_info['cf']
-        logger.store(LossPi=pi_l_old,
+        # 记录训练更新信息
+        kl, ent, cf = pi_info['kl'], pi_info_old['ent'], pi_info['cf']    #这pi_info里存储了KL散度，熵，剪切比信息
+        logger.store(LossPi=pi_l_old,                                     #应该是存储信息
                      LossV=v_l_old,
                      KL=kl,
                      Entropy=ent,
@@ -383,32 +395,33 @@ def ppo(env,
                      DeltaLossV=(loss_v.item() - v_l_old))
 
     # Prepare for interaction with environment
-    start_time = time.time()
-    o, ep_ret, ep_len = env.reset(), 0, 0
+    #准备于环境交互
+    start_time = time.time()                      #获取开始时间
+    o, ep_ret, ep_len = env.reset(), 0, 0         #环境重置
     # ppo_logger.log("o={},ep_ret={},ep_len={}".format(o,ep_ret,ep_len))
 
     # Main loop: collect experience in env and update/log each epoch
     for epoch in range(epochs):
         for t in range(local_steps_per_epoch):
-            a, v, logp = ac.step(torch.as_tensor(o, dtype=torch.float32))
+            a, v, logp = ac.step(torch.as_tensor(o, dtype=torch.float32))      #使用策略生成动作
             #  ppo_logger.log("a={},v={},logp={}".format(a,v,logp))
 
             # print('a={}'.format(a))
-            next_o, r, d, _ = env.step(a)
-            ep_ret += r
-            ep_len += 1
+            next_o, r, d, _ = env.step(a)                                    #环境执行动作
+            ep_ret += r                                                      #累计奖励
+            ep_len += 1                                                      #？次数+1
 
             # save and log
             # print(Back.RED+'o={},\na={},\nr={},\nv={},\nlogp={}'.format(o,a,r,v,logp))
-            buf.store(o, a, r, v, logp)
+            buf.store(o, a, r, v, logp)                                   #存储数据
             logger.store(VVals=v)
 
             # Update obs (critical!)
-            o = next_o
+            o = next_o                                                      #环境更新
 
-            timeout = ep_len == max_ep_len
-            terminal = d or timeout
-            epoch_ended = t == local_steps_per_epoch - 1
+            timeout = ep_len == max_ep_len                                  #检测是否达到最大时间步
+            terminal = d or timeout                                        #检测是否达到终止步
+            epoch_ended = t == local_steps_per_epoch - 1                    # 检测是否到达当前epoch的最后一步
 
             if terminal or epoch_ended:
                 if epoch_ended and not (terminal):
@@ -417,21 +430,21 @@ def ppo(env,
                           flush=True)
                 # if trajectory didn't reach terminal state, bootstrap value target
                 if timeout or epoch_ended:
-                    _, v, _ = ac.step(torch.as_tensor(o, dtype=torch.float32))
+                    _, v, _ = ac.step(torch.as_tensor(o, dtype=torch.float32))   # 计算最后状态的状态值
                 else:
-                    v = 0
-                buf.finish_path(v)
-                if terminal:
+                    v = 0                                                       # 最后状态的状态值为0
+                buf.finish_path(v)                                              # 完成一条轨迹，计算GAE和returns，并加入到经验池中
+                if terminal:                                                    # 如果到达终止状态，记录这条轨迹的EpRet和EpLen
                     # only save EpRet / EpLen if trajectory finished
                     logger.store(EpRet=ep_ret, EpLen=ep_len)
-                o, ep_ret, ep_len = env.reset(), 0, 0
+                o, ep_ret, ep_len = env.reset(), 0, 0                           # 重置环境并开始新的轨迹
 
-        # Save model
+        # Save model                                                             # 保存模型
         if (epoch % save_freq == 0) or (epoch == epochs - 1):
             logger.save_state({'env': env}, None)
 
         # Perform PPO update!
-        update()
+        update()                                                            # 执行PPO算法更新
 
         # Log info about epoch
         logger.log_tabular('Epoch', epoch)
