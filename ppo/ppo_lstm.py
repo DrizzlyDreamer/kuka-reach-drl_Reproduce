@@ -250,14 +250,18 @@ def ppo(env_fn, actor=nn.Module, critic=nn.Module, ac_kwargs=dict(), seed=0,
     # Create actor-critic module
     # ac_pi = actor(np.prod(obs_dim), act_dim, hidden_sizes=[64,64], activation=nn.Tanh)#env.observation_space, env.action_space, nn.ReLU)
     # ac_v = critic(np.prod(obs_dim), hidden_sizes=[64,64], activation=nn.Tanh)#env.observation_space, nn.ReLU)
+    #这段代码是在构建一个用于训练的Actor-Critic模型，其中包括了一个Actor和一个Critic，它们分别被实例化为ac_pi和ac_v。
+    #这里用到了一个nn.module.pyi，这是一个模板
     if pretrain != None:
-        ac_pi = torch.load(pretrain)
+        ac_pi = torch.load(pretrain) # actor
     else:
         ac_pi = actor(obs_dim[0], act_dim[0], hidden_sizes=[64, 64], activation=nn.Tanh, pretrain=pretrain)  # env.observation_space, env.action_space, nn.ReLU)
-    ac_v = critic(obs_dim[0], hidden_sizes=[64, 64], activation=nn.Tanh)  # env.observation_space, nn.ReLU)
+    ac_v = critic(obs_dim[0], hidden_sizes=[64, 64], activation=nn.Tanh)  # env.observation_space, nn.ReLU)   #critic
+    print("构建Actor-Critic完成    √")
 
     ac_pi.to(device)
     ac_v.to(device)
+    print("to device完成          √")
     #ac_pi = nn.DataParallel(ac_pi)
     #ac_v = nn.DataParallel(ac_v)
 
@@ -327,6 +331,7 @@ def ppo(env_fn, actor=nn.Module, critic=nn.Module, ac_kwargs=dict(), seed=0,
             pi_optimizer.step()
 
         logger.store(StopIter=i)
+        print("策略函数更新完毕")
 
         # Value function learning
         for i in range(train_v_iters):
@@ -342,32 +347,58 @@ def ppo(env_fn, actor=nn.Module, critic=nn.Module, ac_kwargs=dict(), seed=0,
                      KL=kl, Entropy=ent, ClipFrac=cf,
                      DeltaLossPi=(loss_pi.item() - pi_l_old),
                      DeltaLossV=(loss_v.item() - v_l_old))
+        print("价值函数更新完毕")
 
     # Prepare for interaction with environment
     start_time = time.time()
+    print("start_time")
     o, ep_ret, ep_len = env.reset(), 0, 0
+    print("env.reset()")
 
+    #加入了一个双向LSTM网络
     # Main loop: collect experience in env and update/log each epoch
     for epoch in range(epochs):
+        print("for epoch in range(epochs)   计算hidden之前")
         hidden = (torch.zeros((1, 512), dtype=torch.float).to(device), torch.zeros((1, 512), dtype=torch.float).to(device))
+        print("for epoch in range(epochs)   计算hidden之后")
         for t in range(local_steps_per_epoch):
             # a, v, logp = ac.step(torch.as_tensor(o, dtype=torch.float32))
+            # 1. 使用当前策略生成动作 a、状态值 v 和动作概率 logp
+            # 禁止梯度计算 （对模型评估或测试时不需要计算梯度）表示这些计算不需要计算梯度，可以提高计算效率。
+            #而第一个主循环没有使用with torch.no_grad()，因为它是手动计算梯度，不能禁止计算梯度。
+            print("torch.no_grad()之前")
             with torch.no_grad():
+                print("before rr")
                 rr = torch.from_numpy(o.copy()).float().to(device)#.unsqueeze(0)
+                print("after rr")
                 pi, _, hidden_ = ac_pi(rr, None, hidden)
+                print("after pi, _, hidden_")
                 a = pi.sample()
+                print("a")
                 # logp_a = self.pi._log_prob_from_distribution(pi, a)
                 logp = pi.log_prob(a).sum(axis=-1)
+                print("logp")
                 v = ac_v(torch.as_tensor(o, dtype=torch.float32).to(device), hidden)
+                print("v")
+                #这里用的是ac_v和ac_pi，这个过程中就会自动进行微分计算
+            print("1")
+
 
             #print('a={}'.format(a))
+            #将 PyTorch Tensor 对象 a 转换为 NumPy 数组，并从计算图中分离（detach）出来，且只取其中的第一个元素，并放到CPU上
+            # 2. 将动作 a 转换为 numpy 数组
             a=a.cpu().detach().numpy()[0]
+            print("2")
+
+
             #print('a={}'.format(a))
             #print("a.cpu().numpy().item()={}".format(a.cpu().numpy().item()))
+            # 3. 执行动作 a，得到新状态、奖励、是否终止以及一些额外信息
             next_o, r, d, _ = env.step(a)
             ep_ret += r
             ep_len += 1
-            #hidden = hidden_ 
+            #hidden = hidden_
+            print("3")
 
             # save and log
             #print(hidden[0].shape)
@@ -376,16 +407,27 @@ def ppo(env_fn, actor=nn.Module, critic=nn.Module, ac_kwargs=dict(), seed=0,
             v=v.cpu().detach().numpy()[0]
             logp=logp.cpu().detach().numpy()[0]
             #print(Back.RED+'o={},\na={},\nr={},\nv={},\nlogp={}'.format(o,a,r,v,logp))
+
+            # 4. 存储经验数据，同时记录状态值
             buf.store(o, a, r, v, logp, hidden[0].cpu().numpy(), hidden[1].cpu().numpy())
             logger.store(VVals=v)
-            
+            print("4")
+
+
+            # 5. 更新状态
             # Update obs (critical!)
             o = next_o
-            hidden = hidden_
+            hidden = hidden_     #使用了LSTM，每一步都需要传入hidden state。而第一个主循环没有使用LSTM，每一步的动作和状态都只由当前的observation决定
+                                 #这个hidden state可以看作是一个网络的记忆，保存了之前的信息。因为LSTM中有门控机制，可以选择哪些信息要传递到下一层，所以它可以有效地防止梯度消失的问题。
+            print("5")
 
+
+            # 6. 判断是否到达最大步数或终止状态，并记录当前轨迹
             timeout = ep_len == max_ep_len
             terminal = d #or timeout
             epoch_ended = t==local_steps_per_epoch-1
+            print("6")
+
 
             if terminal or epoch_ended:
                 if epoch_ended and not(terminal):

@@ -20,7 +20,8 @@ import sys
 
 sys.path.append('../../')
 
-from env.kuka_grasp_env import KukaGraspEnv
+# from env.kuka_grasp_env import KukaGraspEnv
+from env.kuka_gripper_reach_env import  KukaGripperReachEnv
 from ppo.ppo import ppo
 from spinup.utils.mpi_tools import mpi_fork
 import ppo.core as core
@@ -28,7 +29,7 @@ import torch
 # import os
 # print(os.getcwd())
 
-env = KukaGraspEnv(is_good_view=True, is_render=True)
+env = KukaGripperReachEnv(is_good_view=True, is_render=True)
 obs = env.reset()
 
 ac = torch.load("../../pretrained/grasp/model.pt")

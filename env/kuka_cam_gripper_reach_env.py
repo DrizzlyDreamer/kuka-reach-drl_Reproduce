@@ -260,8 +260,8 @@ class KukaCamGripperReachEnv(gym.Env):
                                renderer=p.ER_BULLET_HARDWARE_OPENGL)
         self.images = px
         self.images = self.images[:, :, :
-                                  3]  # the 4th channel is alpha channel, we do not need it.    
-        
+                                        3]  # the 4th channel is alpha channel, we do not need it.
+
         if self.images is not None:
             image = cv2.cvtColor(self.images, cv2.COLOR_RGB2GRAY)
             image = cv2.resize(image, (84, 84))[None, :, :] / 255.

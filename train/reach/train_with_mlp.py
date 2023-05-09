@@ -64,6 +64,6 @@ ppo(env,
 
 
 
-#  python train_with_mlp.py --is_render  --is_good_view  --cpu 5 --epochs 100
+# python train_with_mlp.py --is_render  --is_good_view  --cpu 5 --epochs 100
 
 # python train_with_mlp.py  --cpu 5 --epochs 100

@@ -44,6 +44,9 @@ import math
 
 
 class KukaReachEnv(gym.Env):
+    #在Gym中，每个环境都可以包含一个元数据（metadata）字典，用于描述环境的属性，例如渲染模式和视频帧率等。
+    #在这个例子中，metadata字典定义了环境支持的渲染模式和视频帧率。
+    #具体来说，这个环境支持两种渲染模式：human（人类可视化）和rgb_array（返回RGB图像数组），视频帧率为每秒50帧。
     metadata = {
         'render.modes': ['human', 'rgb_array'],
         'video.frames_per_second': 50
@@ -53,7 +56,7 @@ class KukaReachEnv(gym.Env):
 
         self.max_steps_one_episode = config["max_steps_one_episode"]
         self.is_render = config["is_render"]
-        self.is_good_view = config["is_good_view"]
+        self.is_good_view = config["is_good_view"]#自己设定的，如果is_good_view机械臂动作会变慢方便观察
 
         if self.is_render:
             p.connect(p.GUI)
@@ -85,7 +88,7 @@ class KukaReachEnv(gym.Env):
                                      cameraYaw=0,
                                      cameraPitch=-40,
                                      cameraTargetPosition=[0.55, -0.35, 0.2])
-
+        #动作空间   ->   执行动作
         self.action_space = spaces.Box(low=np.array(
             [self.x_low_action, self.y_low_action, self.z_low_action]),
                                        high=np.array([
@@ -94,6 +97,7 @@ class KukaReachEnv(gym.Env):
                                            self.z_high_action
                                        ]),
                                        dtype=np.float32)
+        #观测空间  ->   获取环境状态
         self.observation_space = spaces.Box(
             low=np.array([
                 self.x_low_obs, self.y_low_obs, self.z_low_obs
@@ -102,6 +106,7 @@ class KukaReachEnv(gym.Env):
                 self.x_high_obs, self.y_high_obs, self.z_high_obs
             ]),
             dtype=np.float32)
+
         self.step_counter = 0
 
         self.urdf_root_path = pybullet_data.getDataPath()

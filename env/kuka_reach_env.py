@@ -95,7 +95,7 @@ class KukaReachEnv(gym.Env):
                                            self.z_high_action
                                        ]),
                                        dtype=np.float32)
-        self.observation_space = spaces.Box(
+        self.observation_space = spaces.Box(#spaces.Box 是用来定义 gym 环境的观测空间的
             low=np.array([self.x_low_obs, self.y_low_obs, self.z_low_obs]),
             high=np.array([self.x_high_obs, self.y_high_obs, self.z_high_obs]),
             dtype=np.float32)
@@ -107,7 +107,7 @@ class KukaReachEnv(gym.Env):
         # upper limits for null space
         self.upper_limits = [.967, 2, 2.96, 2.29, 2.96, 2.09, 3.05]
         # joint ranges for null space
-        self.joint_ranges = [5.8, 4, 5.8, 4, 5.8, 4, 6]
+        self.joint_ranges = [5.8, 4, 5.8, 4, 5.8, 4, 6]                      ##7个
         # restposes for null space
         self.rest_poses = [0, 0, 0, 0.5 * math.pi, 0, -math.pi * 0.5 * 0.66, 0]
         # joint damping coefficents
@@ -115,7 +115,7 @@ class KukaReachEnv(gym.Env):
             0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001
         ]
 
-        self.init_joint_positions = [
+        self.init_joint_positions = [ #7个
             0.006418, 0.413184, -0.011401, -1.589317, 0.005379, 1.137684,
             -0.006539
         ]

@@ -64,7 +64,9 @@ init(autoreset=True)  # this lets colorama takes effect only in current line.
 # ERROR       由于严重的问题，程序的某些功能已经不能正常执行
 # CRITICAL    严重的错误，表明程序已不能继续执行
 
-
+#是用来设置机械臂的摄像头参数，比如分辨率，视场等等。
+# 摄像头一般用来获取机械臂和物品的相对位置、距离以及姿态等信息，进而控制机械臂进行抓取。
+# 所以在这个环境中，相机参数与机械臂和物品的交互有关。
 class KukaCamReachEnv(gym.Env):
     metadata = {
         'render.modes': ['human', 'rgb_array'],
@@ -81,7 +83,7 @@ class KukaCamReachEnv(gym.Env):
 
         # some camera parameters
         # all the parameters are tested with test/slide_bar_for_camera.py file.
-
+        #定义了一些参数（宽度、高度、势场）这些参数都是用来计算相机视图矩阵和透视投影矩阵的，从而让PyBullet中的虚拟相机呈现出正确的视角。
         self.camera_parameters = {
             'width': 960.,
             'height': 720,
@@ -96,15 +98,17 @@ class KukaCamReachEnv(gym.Env):
                 0.5, 0, 1
             ],  #the direction is from the light source position to the origin of the world frame.
         }
-
-        self.device = torch.device(
-            "cpu" if torch.cuda.is_available() else "cpu")
+        #他这个有问题，两个cpu
+        # self.device = torch.device(
+        #     "cpu" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # self.view_matrix=p.computeViewMatrix(
         #     cameraEyePosition=self.camera_parameters['eye_position'],
         #     cameraTargetPosition=self.camera_parameters['target_position'],
         #     cameraUpVector=self.camera_parameters['camera_up_vector']
         # )
+        #使用PyBullet函数 计算视角矩阵（view matrix）,视角矩阵是一个4x4的矩阵，用于将3D场景中的物体坐标转换为2D屏幕坐标。
         self.view_matrix = p.computeViewMatrixFromYawPitchRoll(
             cameraTargetPosition=[0.55, 0, 0.05],
             distance=.7,
@@ -112,7 +116,7 @@ class KukaCamReachEnv(gym.Env):
             pitch=-70,
             roll=0,
             upAxisIndex=2)
-
+        #计算透视投影矩阵。它将三维世界坐标系中的点投影到二维平面上，用于实现透视效果。在图形学中，通常使用透视投影矩阵来定义摄像机的视角和投影方式，即如何将三维场景投影到二维平面上。
         self.projection_matrix = p.computeProjectionMatrixFOV(
             fov=self.camera_parameters['fov'],
             aspect=self.camera_parameters['width'] /
@@ -148,7 +152,7 @@ class KukaCamReachEnv(gym.Env):
                                      cameraPitch=-40,
                                      cameraTargetPosition=[0.55, -0.35, 0.2])
 
-        self.action_space = spaces.Box(low=np.array(
+        self.action_space = spaces.Box(low=np.array(#spaces.Box 是用来定义 gym 环境的观测空间的
             [self.x_low_action, self.y_low_action, self.z_low_action]),
                                        high=np.array([
                                            self.x_high_action,
@@ -237,6 +241,7 @@ class KukaCamReachEnv(gym.Env):
         table_uid = p.loadURDF(os.path.join(self.urdf_root_path,
                                             "table/table.urdf"),
                                basePosition=[0.5, 0, -0.65])
+        #这段代码是用来改变物体的视觉形状。改变table为白色
         p.changeVisualShape(table_uid, -1, rgbaColor=[1, 1, 1, 1])
         # p.loadURDF(os.path.join(self.urdf_root_path, "tray/traybox.urdf"),basePosition=[0.55,0,0])
         #object_id=p.loadURDF(os.path.join(self.urdf_root_path, "random_urdfs/000/000.urdf"), basePosition=[0.53,0,0.02])
@@ -272,14 +277,19 @@ class KukaCamReachEnv(gym.Env):
         #     renderer=p.ER_BULLET_HARDWARE_OPENGL
         # )
 
-        (_, _, px, _,
+        #获取相机拍摄的图像。
+        #由于只需要获取rgba，因此使用(_, _, px, _, _)来取得相机拍摄的图像。
+        #只需要图像中的颜色信息，所以是rgba
+        (_, _, px, _,                        #[R1, G1, B1, A1, R2, G2, B2, A2, ...]
          _) = p.getCameraImage(width=960,
                                height=960,
                                viewMatrix=self.view_matrix,
                                projectionMatrix=self.projection_matrix,
                                renderer=p.ER_BULLET_HARDWARE_OPENGL)
-        self.images = px
-
+        self.images = px   #--原来的，是一个tuple元祖类型
+        self.images = np.array(px)                         # -gpt：转化为numpy数组
+        self.images = self.images.reshape((960, 960, 4))   # -gpt：数组的形状从 (960, 960, 4) 转换为 (960, 960, 4)
+        #这行代码是在为机械臂的最后一个关节开启力和扭矩传感器。在机械臂运动过程中，通过传感器可以得到关节扭矩和力的信息，这些信息可以用来进行控制或者监测机械臂的运动状态。
         p.enableJointForceTorqueSensor(bodyUniqueId=self.kuka_id,
                                        jointIndex=self.num_joints - 1,
                                        enableSensor=True)
@@ -289,12 +299,17 @@ class KukaCamReachEnv(gym.Env):
         self.object_pos = p.getBasePositionAndOrientation(self.object_id)[0]
         #return np.array(self.object_pos).astype(np.float32)
         #return np.array(self.robot_pos_obs).astype(np.float32)
-        self.images = self.images[:, :, :
-                                  3]  # the 4th channel is alpha channel, we do not need it.
+        #从RGBA格式转换为RGB格式。GBA格式是指包含红色、绿色、蓝色和透明度四个通道的图像格式，而RGB格式只包含红色、绿色和蓝色三个通道，因此把第四个通道去掉就可以得到RGB格式的图像。
+        #3 表示只选择前三个颜色通道（即红色、绿色和蓝色）。
+        self.images = self.images[:, :, :3].astype(np.uint8)  # the 4th channel is alpha channel, we do not need it. .astype(np.uint8)
         #return self._process_image(self.images)
 
-        return self._process_image(self.images)
+        return self._process_image(self.images) #RGB转换为灰度图像 -> 灰度图像是一种仅包含亮度值而不包含颜色信息的图像。它们通常用于减少图像处理的复杂性和计算量，因为它们只包含一个单独的亮度通道，而不是三个颜色通道。
 
+
+    #这个函数将RGB图像转换为灰度图像，并将其大小调整为84x84
+    #然后将其增加一个通道，并将像素值标准化到[0,1]范围内。
+    #如果输入图像为空，则返回一个大小为(1, 84, 84)的全0数组。
     def _process_image(self, image):
         """Convert the RGB pic to gray pic and add a channel 1
 
@@ -303,8 +318,11 @@ class KukaCamReachEnv(gym.Env):
         """
 
         if image is not None:
-            image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-            image = cv2.resize(image, (84, 84))[None, :, :] / 255.
+            image = np.array(image)
+            if image is not None and len(image.shape) == 3 and image.shape[2] == 3:    #3通道的才转换，1通道的就不用转换了
+                image = cv2.convertScaleAbs(image)
+                image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)     #将RGB图片转换为灰度图，此时图片的通道数变为了1，输入必须是三通道。
+                image = cv2.resize(image, (84, 84))[None, :, :] / 255.  #输出是一个三维数组
             return image
         else:
             return np.zeros((1, 84, 84))
@@ -407,7 +425,13 @@ class KukaCamReachEnv(gym.Env):
                                viewMatrix=self.view_matrix,
                                projectionMatrix=self.projection_matrix,
                                renderer=p.ER_BULLET_HARDWARE_OPENGL)
-        self.images = px
+        #Debug，将px转换为三维数组
+        px = np.reshape(px, (960, 960, 4))
+        px = px[:, :, :3]  # 取前三个通道
+        px = np.flipud(px)  # 上下翻转
+
+        self.images = px    #这里的image需要的是三维的RGB图像
+
         self.processed_image = self._process_image(self.images)
         #self.observation=self.robot_state
         self.observation = self.object_state
@@ -416,6 +440,8 @@ class KukaCamReachEnv(gym.Env):
     def close(self):
         p.disconnect()
 
+    #这个函数是用来调试用的，作用是让机械臂到达一个目标位置，然后获取当前末端的力传感器数值。它可以用来测试机械臂是否能够到达指定的目标位置，并且力传感器是否正常工作。
+    # 这对于调试机械臂的运动和感知能力非常有帮助。
     def run_for_debug(self, target_position):
         temp_robot_joint_positions = p.calculateInverseKinematics(
             bodyUniqueId=self.kuka_id,
@@ -438,6 +464,7 @@ class KukaCamReachEnv(gym.Env):
 
         return self._get_force_sensor_value()
 
+    #这个函数用于获取机械臂的力传感器值，具体来说是获取机械臂的最后一个关节的第3个值，即Z轴方向上的力传感器值。这个函数会在机械臂接触物体时被调用，用于判断机械臂是否接触到了物体。如果接触到了物体，就认为这个episode已经完成了。
     def _get_force_sensor_value(self):
         force_sensor_value = p.getJointState(bodyUniqueId=self.kuka_id,
                                              jointIndex=self.num_joints -
@@ -473,7 +500,15 @@ class CustomSkipFrame(gym.Wrapper):
                 states.append(state)
             else:
                 states.append(state)
-        states = np.concatenate(states, 0)[None, :, :, :]
+        print("states:!!!!!!!!!!!!!!!")
+        print(states)
+        states = np.concatenate(states, 0)[None, :, :, :]   #原版
+        # states中每个状态是一个三维的数组
+        # 将 states 中的所有状态按照第一个维度拼接起来，形成一个 (num_states, height, width) 的数组。
+        # 然后 [None, :, :, :] 在第一个维度增加了一个新的维度，变成了 (1, num_states, height, width) 的数组。
+        #states = np.array(states)
+        #print(states.shape)  # 打印 states 的维度
+        #states = np.stack(states, axis=0) #GPT说的
         return states.astype(np.float32), reward, done, info
 
     def reset(self):

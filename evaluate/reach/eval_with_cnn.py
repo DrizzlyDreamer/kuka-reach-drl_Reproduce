@@ -24,7 +24,7 @@ env = KukaCamReachEnv(is_good_view=True, is_render=True)
 env = CustomSkipFrame(env)
 obs = env.reset()
 
-ac = torch.load("pretrained/reach-cnn/model.pt")
+ac = torch.load("/home/zhangshidi/GitHub/1_Reproduce/kuka-reach-drl_Reproduce/pretrained/reach-cnn/kuka/model.pt")
 print('ac={}'.format(ac))
 
 actions = ac.act(torch.as_tensor(obs, dtype=torch.float32))

@@ -31,8 +31,8 @@
                 1.137684,
                 -0.006539
             ],
-            "is_good_view":	true,
-            "is_render":	true,
+            "is_good_view":	false,
+            "is_render":	false,
             "joint_damping":	[
                 1e-05,
                 1e-05,
@@ -65,8 +65,8 @@
             "num_joints":	7,
             "object_id":	3,
             "object_pos":	[
-                0.5651070233143036,
-                -0.24404954831751094,
+                0.602371607252595,
+                -0.28157674382559644,
                 0.00982638888888889
             ],
             "observation_space":	{
@@ -133,7 +133,7 @@
     "gamma":	0.99,
     "lam":	0.97,
     "logger":	{
-        "<ppo.logx.EpochLogger object at 0x7f619803ae10>":	{
+        "<ppo.logx.EpochLogger object at 0x7f68860c67b8>":	{
             "epoch_dict":	{},
             "exp_name":	"ppo-kuka-reach",
             "first_row":	true,

@@ -66,3 +66,7 @@ ppo(env,
     steps_per_epoch=env.max_steps_one_episode*args.cpu,
     epochs=args.epochs,
     logger_kwargs=logger_kwargs)
+
+# python train_with_lstm.py --is_render  --is_good_view  --cpu 5 --epochs 100
+
+# python train_with_lstm.py  --cpu 5 --epochs 100

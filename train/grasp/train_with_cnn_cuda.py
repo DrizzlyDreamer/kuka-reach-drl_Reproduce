@@ -64,3 +64,6 @@ ppo(env,
     steps_per_epoch=env.max_steps_one_episode * args.cpu,
     epochs=args.epochs,
     logger_kwargs=logger_kwargs)
+
+# train:
+#   python train_with_cnn_cuda.py --render  --good-view  --cpu 5 --epochs 100

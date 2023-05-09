@@ -17,7 +17,8 @@ os.chdir(current_dir)
 import sys
 sys.path.append('../../')
 
-from env.kuka_grasp_env import KukaGraspEnv
+from env.kuka_gripper_reach_env import KukaGripperReachEnv
+#from env.kuka_grasp_env import KukaGraspEnv
 from ppo.ppo import ppo
 from spinup.utils.mpi_tools import mpi_fork
 import ppo.core as core
@@ -44,8 +45,8 @@ parser.add_argument('--log_dir', type=str, default="../../logs")
 args = parser.parse_args()
 
 
-
-env=KukaGraspEnv(is_render=args.render,is_good_view=args.good_view)
+#env=KukaGraspEnv(is_render=args.render,is_good_view=args.good_view)
+env=KukaGripperReachEnv(is_render=args.render,is_good_view=args.good_view)
 
 mpi_fork(args.cpu)  # run parallel code with mpi
 
@@ -61,3 +62,7 @@ ppo(env,
     steps_per_epoch=env.max_steps_one_episode*args.cpu,
     epochs=args.epochs,
     logger_kwargs=logger_kwargs)
+
+
+#train
+#python train_with_mlp.py --render  --good_view  --cpu 5 --epochs 100

@@ -16,7 +16,7 @@ class MLPActor(nn.Module):
     def __init__(self,obs,obs_dim,hidden_sizes,act_dim,activation):
         super().__init__()
         log_std = -0.5 * np.ones(act_dim, dtype=np.float32)  # 高斯分布的标准差 ，用.ones创建了数组，长度为act_dim，每个元素都是-0.5，每个动作维度的标准差都是-0.5
-        self.log_std = torch.nn.Parameter(torch.as_tensor(log_std)) #as_tensor转换为张量，Par..封装为可学习PyTorch参数，可以被更新  *****************
+        self.log_std = torch.nn.Parameter(torch.as_tensor(log_std)) #as_tensor转换为张量，Par.封装为可学习PyTorch参数，可以被更新  *****************
         self.mu_net = mlp([obs_dim] + list(hidden_sizes) + [act_dim], activation)  # self.mu_net 是一个 MLP 模型，用于估计在给定状态下，动作分布的均值
         self.obs=obs
 
